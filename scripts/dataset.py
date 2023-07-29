@@ -1,12 +1,12 @@
-from torch_geometric.data import Data, Dataset, DataLoader
+from torch_geometric.data import Data, Dataset
 from tqdm import tqdm
 import pandas as pd
 import os.path as osp
 import torch
 from utils import *
 
-class FinlandDataset(Dataset):
-    def __init__(self, root, k="none",  transform=None, pre_transform=None):
+class Dataset(Dataset):
+    def __init__(self,name, root, k="none",  transform=None, pre_transform=None):
         """
         root: root directory of the dataset, folder is spliut into raw_dir and processed_dir
         transform: transform to apply to each data instance
@@ -14,7 +14,8 @@ class FinlandDataset(Dataset):
         """
         self.k = k
         self.map = []
-        super(FinlandDataset, self).__init__(root, transform, pre_transform)
+        self.name = name
+        super(Dataset, self).__init__(root, transform, pre_transform)
 
 
     @property
@@ -22,7 +23,7 @@ class FinlandDataset(Dataset):
         """
         returns the names of the raw files in the raw_dir
         """
-        return ["ap_coords.csv", "scans.csv", "scan_coords.csv"]
+        return [f"{self.name}_ap_coords.csv", f"{self.name}_scans.csv", f"{self.name}_scan_coords.csv"]
     
     @property
     def processed_file_names(self):
@@ -30,7 +31,7 @@ class FinlandDataset(Dataset):
         returns the names of the processed files in the processed_dir
         """
         data = pd.read_csv(osp.join(self.raw_paths[1]))
-        return [f"data_{i}.pt" for i in range(len(data))]
+        return [f"{self.name}_data_{i}.pt" for i in range(len(data))]
     
     def download(self):
         """
@@ -77,4 +78,48 @@ class FinlandDataset(Dataset):
         # get data object
         data = Data(x=torch.tensor(node_attrs, dtype=torch.float), edge_index=edge_index, edge_attr=torch.tensor(edge_attrs, dtype=torch.float), y=labels)
 
+        return data
+
+    def get_mapping(self, idx):
+        """
+        returns the mapping
+        """
+        return self.map[idx]
+
+    def process(self):
+        """
+        processes the dataset
+        """
+        dataframes = []
+        for raw_path in self.raw_paths:
+            dataframes.append(pd.read_csv(raw_path))
+        
+        self.length = len(dataframes[1])
+        # get the ap coordinates
+        ap_coords = dataframes[0]
+        # get the scans
+        scans = dataframes[1].to_numpy()
+        # get the scan coordinates
+        scan_coords = dataframes[2].to_numpy()
+
+        # create a list of graphs
+
+        for idx, scan in tqdm(enumerate(scans), total=len(scans)):
+            # get the data object
+            data = self._convNxGraphToPyGData(ap_coords, scan, scan_coords[idx])
+            # save the data object
+            torch.save(data, osp.join(self.processed_dir, "{}_data_{}.pt".format(self.name, idx)))
+        
+    def len(self):
+
+        """
+        returns the length of the dataset
+        """
+        return self.length
+    
+    def get(self, idx):
+        """
+        returns the idx-th data object
+        """
+        data = torch.load(osp.join(self.processed_dir, "{}_data_{}.pt".format(self.name, idx)))
         return data
