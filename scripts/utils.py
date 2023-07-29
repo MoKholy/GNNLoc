@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import networkx as nx
 
 
 # function to collect indices of aps heard, and their rssi values
@@ -67,3 +68,138 @@ def save_estimated_coordinates(scans, coords, save_loc):
     # save the dataframe
     df.to_csv(save_loc, index=False)
     return df
+
+# function to find index of strongest AP index
+def get_strongest_ap_index(scan):
+    # make copy of scan
+    scan_copy = np.copy(scan)
+    # set all 100s to -1000
+    scan_copy[scan_copy == 100] = -1000
+    # return index of strongest ap
+    return np.argmax(scan_copy)
+
+# function to get heard AP indices and signal strengths
+def get_heard_ap_indices_and_signals(scan):
+    ap_heard_indices = np.argwhere(scan !=100)
+    ap_heard_signals = scan[ap_heard_indices]
+    return ap_heard_indices, ap_heard_signals
+
+# function to get the top k heard AP indices and signal strengths per scan
+def get_top_k_heard_ap_indices_and_signals(scan, k=10):
+    # get the heard ap indices and signals
+    ap_heard_indices, ap_heard_signals = get_heard_ap_indices_and_signals(scan)
+    # sort the signals
+    assert len(ap_heard_indices) == len(ap_heard_signals)
+
+    # flatten the arrays
+    ap_heard_indices = ap_heard_indices.flatten()
+    ap_heard_signals = ap_heard_signals.flatten()
+    sorted_indices = np.argsort(ap_heard_signals)
+    # print("sortred indices: {}".format(sorted_indices))
+    # print("heard indices: {}".format(ap_heard_indices))
+    # print("heard signals: {}".format(ap_heard_signals))
+    # get the top k indices and signals
+    top_k_indices = ap_heard_indices[sorted_indices[-k:]]
+    top_k_signals = ap_heard_signals[sorted_indices[-k:]]
+    # return the top k indices and signals
+    return top_k_indices, top_k_signals
+
+# function to get the relative coordinates wrt to the strongest ap
+def get_relative_coordinates(scan, coords, scan_coords, k="none"):
+
+    # get the index of the strongest ap
+    strongest_ap_index = get_strongest_ap_index(scan)
+
+    # get the coordinates of the strongest ap
+    strongest_ap_coords = coords.loc[strongest_ap_index]
+
+    # get the heard ap indices and signals
+
+    # if k is none, get all the heard ap indices and signals, else get the k strongest ap indices and signals
+    if k == "none":
+        ap_heard_indices, ap_heard_signals = get_heard_ap_indices_and_signals(scan)
+    else:
+        ap_heard_indices, ap_heard_signals = get_top_k_heard_ap_indices_and_signals(scan, k=k)
+    # get the coordinates of the heard aps
+    ap_heard_coords = coords.loc[ap_heard_indices.flatten()].to_numpy()
+
+    # get the relative coordinates
+    relative_coords = []
+    for ap_heard_coord in ap_heard_coords:
+        # subtract the strongest ap coordinates from the heard ap coordinates
+        ap_x, ap_y, ap_z = ap_heard_coord
+        strongest_ap_x, strongest_ap_y, strongest_ap_z = strongest_ap_coords
+        relative_coords.append((ap_x - strongest_ap_x, ap_y - strongest_ap_y, ap_z - strongest_ap_z))
+
+    # get relative coordinates of the scan
+    scan_x, scan_y, scan_z = scan_coords
+    strongest_ap_x, strongest_ap_y, strongest_ap_z = strongest_ap_coords
+    relative_scan_coords = (scan_x - strongest_ap_x, scan_y - strongest_ap_y, scan_z - strongest_ap_z)
+    # return the relative coordinates
+    return relative_coords, ap_heard_signals, relative_scan_coords
+
+def get_distance_between_aps(ap1, ap2, distance_metric="euclidean"):
+    # get the coordinates of the aps
+    x1, y1, z1 = ap1
+    x2, y2, z2 = ap2
+    # calculate the distance based on distance metric
+    # distance can be euclidean, manhattan, or inverse of euclidean, default to euclidean
+    if distance_metric == "euclidean":
+        distance = np.sqrt((x1-x2)**2 + (y1-y2)**2 + (z1-z2)**2)
+    elif distance_metric == "manhattan":
+        distance = np.abs(x1-x2) + np.abs(y1-y2) + np.abs(z1-z2)
+    elif distance_metric == "inverse_euclidean":
+        distance = 1/(np.sqrt((x1-x2)**2 + (y1-y2)**2 + (z1-z2)**2)+1)
+    else:
+        distance = np.sqrt((x1-x2)**2 + (y1-y2)**2 + (z1-z2)**2)
+
+    return distance
+
+# function to get distance between all APs
+def get_distance_between_all_aps(ap_coords, distance_metric="euclidean"):
+
+    # get the distance between each pair of aps as tuple of (ap1, ap2, distance)
+    distances = []
+    for i in range(len(ap_coords)):
+        for j in range(i+1, len(ap_coords)):
+            distances.append((i, j, get_distance_between_aps(ap_coords[i], ap_coords[j], distance_metric)))
+    
+    return distances
+
+# function to create a graph from the relative distance for a scan, nodes have their relative coordinates and signal strength as features
+def create_graph_from_scan(ap_coords, scan, scan_coords, distance_metric="euclidean", k="none"):
+    # create a graph
+    G = nx.Graph()
+    # get the relative coordinates and signal strengths
+    relative_coords, ap_heard_signals, normalized_scan_coords = get_relative_coordinates(scan, ap_coords, scan_coords, k=k)
+    # add nodes to the graph
+    for i in range(len(relative_coords)):
+        # get the relative coordinates and signal strength of the node
+        relative_coord = relative_coords[i]
+        signal_strength = ap_heard_signals[i]
+        # add the node to the graph
+        G.add_node(i, relative_coord=relative_coord, signal_strength=signal_strength)
+    # get the distances between all the aps
+    distances = get_distance_between_all_aps(relative_coords, distance_metric)
+    # add the edges to the graph
+    for distance in distances:
+        # get the ap indices and distance
+        ap1, ap2, distance = distance
+        # add the edge to the graph
+        G.add_edge(ap1, ap2, distance=distance)
+    # return the graph
+    return G, normalized_scan_coords
+
+# function visualize the graph
+def visualize_graph(G):
+    from matplotlib import pyplot as plt
+    # get the positions of the nodes
+    pos = nx.spring_layout(G)
+    # draw the nodes
+    nx.draw_networkx_nodes(G, pos, node_size=100)
+    # draw the edges
+    nx.draw_networkx_edges(G, pos)
+    # draw the labels
+    nx.draw_networkx_labels(G, pos)
+    # show the plot
+    plt.show()
