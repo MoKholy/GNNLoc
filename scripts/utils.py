@@ -136,7 +136,7 @@ def get_relative_coordinates(scan, coords, scan_coords, k="none"):
     strongest_ap_x, strongest_ap_y, strongest_ap_z = strongest_ap_coords
     relative_scan_coords = (scan_x - strongest_ap_x, scan_y - strongest_ap_y, scan_z - strongest_ap_z)
     # return the relative coordinates
-    return relative_coords, ap_heard_signals, relative_scan_coords
+    return relative_coords, ap_heard_signals, relative_scan_coords, strongest_ap_coords
 
 def get_distance_between_aps(ap1, ap2, distance_metric="euclidean"):
     # get the coordinates of the aps
@@ -171,7 +171,7 @@ def create_graph_from_scan(ap_coords, scan, scan_coords, distance_metric="euclid
     # create a graph
     G = nx.Graph()
     # get the relative coordinates and signal strengths
-    relative_coords, ap_heard_signals, normalized_scan_coords = get_relative_coordinates(scan, ap_coords, scan_coords, k=k)
+    relative_coords, ap_heard_signals, normalized_scan_coords, strongest_ap_coordinates = get_relative_coordinates(scan, ap_coords, scan_coords, k=k)
     # add nodes to the graph
     for i in range(len(relative_coords)):
         # get the relative coordinates and signal strength of the node
@@ -188,7 +188,7 @@ def create_graph_from_scan(ap_coords, scan, scan_coords, distance_metric="euclid
         # add the edge to the graph
         G.add_edge(ap1, ap2, distance=distance)
     # return the graph
-    return G, normalized_scan_coords
+    return G, normalized_scan_coords, strongest_ap_coordinates
 
 # function visualize the graph
 def visualize_graph(G):

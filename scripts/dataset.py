@@ -13,7 +13,7 @@ class Dataset(Dataset):
         pre_transform: transform to apply to the whole dataset
         """
         self.k = k
-        self.map = []
+        self.map = {}
         self.name = name
         super(Dataset, self).__init__(root, transform, pre_transform)
 
@@ -31,6 +31,7 @@ class Dataset(Dataset):
         returns the names of the processed files in the processed_dir
         """
         data = pd.read_csv(osp.join(self.raw_paths[1]))
+        self.length = len(data)
         return [f"{self.name}_data_{i}.pt" for i in range(len(data))]
     
     def download(self):
@@ -39,17 +40,14 @@ class Dataset(Dataset):
         """
         pass
     
-    def _convNxGraphToPyGData(self, ap_coords, scan, scan_coords):
+    def _convNxGraphToPyGData(self, ap_coords, scan, scan_coords, idx):
 
         """ Helper function to convert a networkx graph to a PyG data object. """
 
         # get graph
-        G, relative_scan_coords = create_graph_from_scan(ap_coords, scan, scan_coords, k=self.k)
+        G, relative_scan_coords, strongest_ap_coordinates = create_graph_from_scan(ap_coords, scan, scan_coords, k=self.k)
 
-        if not self.test:
-            self.map_train.append((scan_coords, relative_scan_coords))
-        else:
-            self.map_test.append((scan_coords, relative_scan_coords))
+        
         # convert node labels to integers
         G = nx.convert_node_labels_to_integers(G)
 
@@ -78,6 +76,8 @@ class Dataset(Dataset):
         # get data object
         data = Data(x=torch.tensor(node_attrs, dtype=torch.float), edge_index=edge_index, edge_attr=torch.tensor(edge_attrs, dtype=torch.float), y=labels)
 
+
+        self.map[idx] = (scan_coords, relative_scan_coords, strongest_ap_coordinates) # so we can denomralize later
         return data
 
     def get_mapping(self, idx):
@@ -106,7 +106,7 @@ class Dataset(Dataset):
 
         for idx, scan in tqdm(enumerate(scans), total=len(scans)):
             # get the data object
-            data = self._convNxGraphToPyGData(ap_coords, scan, scan_coords[idx])
+            data = self._convNxGraphToPyGData(ap_coords, scan, scan_coords[idx], idx)
             # save the data object
             torch.save(data, osp.join(self.processed_dir, "{}_data_{}.pt".format(self.name, idx)))
         

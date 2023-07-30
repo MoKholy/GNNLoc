@@ -2,7 +2,7 @@ from tqdm import tqdm
 import torch
 import torch.optim as optim
 from accelerate import Accelerator
-from torch_geometric.data import DataLoader
+from torch_geometric.loader import DataLoader
 from torch.utils.data import random_split
 import argparse
 import os
@@ -21,10 +21,10 @@ def parse_args():
 # function to load dataset
 def load_dataset(name, k, batch_size, train_ratio, test_ratio):
     # get dataset
-    dataset = Dataset(root="./data", name=name, k=k)
+    dataset = Dataset(root="../data", name=name, k=k)
     # get train and test size
     train_size = int(train_ratio * len(dataset))
-    test_size = int(test_ratio * len(dataset))
+    test_size = dataset.len() - train_size
     # get train and test dataset
     train_dataset, test_dataset = random_split(dataset, [train_size, test_size])
     # get train and test loader
