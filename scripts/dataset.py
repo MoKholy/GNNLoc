@@ -32,7 +32,8 @@ class Dataset(Dataset):
         """
         data = pd.read_csv(osp.join(self.raw_paths[1]))
         self.length = len(data)
-        return [f"{self.name}_data_{i}.pt" for i in range(len(data))]
+        # return [f"{self.name}_data_{i}.pt" for i in range(len(data))]
+        return "not_implemented.pt"
     
     def download(self):
         """
@@ -78,6 +79,7 @@ class Dataset(Dataset):
 
 
         self.map[idx] = (scan_coords, relative_scan_coords, strongest_ap_coordinates) # so we can denomralize later
+        # print(self.map[idx])
         return data
 
     def get_mapping(self, idx):
@@ -103,7 +105,7 @@ class Dataset(Dataset):
         scan_coords = dataframes[2].to_numpy()
 
         # create a list of graphs
-
+        
         for idx, scan in tqdm(enumerate(scans), total=len(scans)):
             # get the data object
             data = self._convNxGraphToPyGData(ap_coords, scan, scan_coords[idx], idx)
