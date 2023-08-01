@@ -107,6 +107,7 @@ class Dataset(Dataset):
         for idx, scan in tqdm(enumerate(scans), total=len(scans)):
             # get the data object
             data = self._convNxGraphToPyGData(ap_coords, scan, scan_coords[idx], idx)
+            data.index = idx
             # save the data object
             torch.save(data, osp.join(self.processed_dir, "{}_data_{}.pt".format(self.name, idx)))
         

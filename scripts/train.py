@@ -96,8 +96,8 @@ def train_model(model, name, train_loader, test_loader, epochs, accelerator, wri
 
         # log to tensorboard
         if accelerator.is_main_process:
-            writer.add_scalar("Train MSE", avg_train_mse, epoch)
-            writer.add_scalar("Train MAE", avg_train_mae, epoch)
+            writer.add_scalar(f"{name}_Train MSE", avg_train_mse, epoch)
+            writer.add_scalar(f"{name}_Train MAE", avg_train_mae, epoch)
 
         # set model to eval
         model.eval()
