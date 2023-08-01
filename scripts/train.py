@@ -64,7 +64,8 @@ def train_model(model, name, train_loader, test_loader, epochs, accelerator, wri
             x, edge_attr, edge_index, batch_index, y = data.x, data.edge_attr, data.edge_index, data.batch, data.y
 
             # reshape y
-            y = y.reshape(-1, 3)
+            # y = y.reshape(-1, 3)
+            y = y.reshape(-1, 2)
 
             # get output
             output = model(x, edge_attr, edge_index, batch_index)
@@ -114,7 +115,8 @@ def train_model(model, name, train_loader, test_loader, epochs, accelerator, wri
                 x, edge_attr, edge_index, batch_index, y = data.x, data.edge_attr, data.edge_index, data.batch, data.y
 
                 # reshape y
-                y = y.reshape(-1, 3)
+                # y = y.reshape(-1, 3)
+                y = y.reshape(-1, 2)
 
                 # get output
                 output = model(x, edge_attr, edge_index, batch_index)
