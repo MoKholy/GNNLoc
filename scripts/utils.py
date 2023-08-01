@@ -19,7 +19,9 @@ def get_location_indices_signals(df):
 def get_index_coordinates(indices, coords_df):
     # get the coordinates of the aps using indices
     coordinates = coords_df.loc[indices]
-    return coordinates["x"].to_numpy(), coordinates["y"].to_numpy(), coordinates["z"].to_numpy()
+    return coordinates.iloc[0].to_numpy(), coordinates.iloc[1].to_numpy() #, coordinates.iloc[2].to_numpy()
+
+
 
 # function to estimate ap weight
 def get_ap_weight(rss):
@@ -99,9 +101,15 @@ def get_top_k_heard_ap_indices_and_signals(scan, k=10):
     # print("heard indices: {}".format(ap_heard_indices))
     # print("heard signals: {}".format(ap_heard_signals))
     # get the top k indices and signals
-    top_k_indices = ap_heard_indices[sorted_indices[-k:]]
-    top_k_signals = ap_heard_signals[sorted_indices[-k:]]
+    if len(ap_heard_indices > k):
+        top_k_indices = ap_heard_indices[sorted_indices[-k:]]
+        top_k_signals = ap_heard_signals[sorted_indices[-k:]]
+    else:
+        top_k_indices = ap_heard_indices
+        top_k_signals = ap_heard_signals
+    
     # return the top k indices and signals
+
     return top_k_indices, top_k_signals
 
 # function to get the relative coordinates wrt to the strongest ap
@@ -120,6 +128,7 @@ def get_relative_coordinates(scan, coords, scan_coords, k="none"):
         ap_heard_indices, ap_heard_signals = get_heard_ap_indices_and_signals(scan)
     else:
         ap_heard_indices, ap_heard_signals = get_top_k_heard_ap_indices_and_signals(scan, k=k)
+        
     # get the coordinates of the heard aps
     ap_heard_coords = coords.loc[ap_heard_indices.flatten()].to_numpy()
 
@@ -127,31 +136,43 @@ def get_relative_coordinates(scan, coords, scan_coords, k="none"):
     relative_coords = []
     for ap_heard_coord in ap_heard_coords:
         # subtract the strongest ap coordinates from the heard ap coordinates
-        ap_x, ap_y, ap_z = ap_heard_coord
-        strongest_ap_x, strongest_ap_y, strongest_ap_z = strongest_ap_coords
-        relative_coords.append((ap_x - strongest_ap_x, ap_y - strongest_ap_y, ap_z - strongest_ap_z))
+        # ap_x, ap_y, ap_z = ap_heard_coord
+        ap_x, ap_y = ap_heard_coord
+        # strongest_ap_x, strongest_ap_y, strongest_ap_z = strongest_ap_coords
+        strongest_ap_x, strongest_ap_y = strongest_ap_coords
+        relative_coords.append((ap_x - strongest_ap_x, ap_y - strongest_ap_y))
+        # relative_coords.append((ap_x - strongest_ap_x, ap_y - strongest_ap_y, ap_z - strongest_ap_z))
 
     # get relative coordinates of the scan
-    scan_x, scan_y, scan_z = scan_coords
-    strongest_ap_x, strongest_ap_y, strongest_ap_z = strongest_ap_coords
-    relative_scan_coords = (scan_x - strongest_ap_x, scan_y - strongest_ap_y, scan_z - strongest_ap_z)
+    # scan_x, scan_y, scan_z = scan_coords
+    scan_x, scan_y = scan_coords
+    # strongest_ap_x, strongest_ap_y, strongest_ap_z = strongest_ap_coords
+    strongest_ap_x, strongest_ap_y = strongest_ap_coords
+    # relative_scan_coords = (scan_x - strongest_ap_x, scan_y - strongest_ap_y, scan_z - strongest_ap_z)
+    relative_scan_coords = (scan_x - strongest_ap_x, scan_y - strongest_ap_y)
     # return the relative coordinates
     return relative_coords, ap_heard_signals, relative_scan_coords, strongest_ap_coords
 
 def get_distance_between_aps(ap1, ap2, distance_metric="euclidean"):
     # get the coordinates of the aps
-    x1, y1, z1 = ap1
-    x2, y2, z2 = ap2
+    # x1, y1, z1 = ap1
+    # x2, y2, z2 = ap2
+    x1, y1 = ap1
+    x2, y2 = ap2
     # calculate the distance based on distance metric
     # distance can be euclidean, manhattan, or inverse of euclidean, default to euclidean
     if distance_metric == "euclidean":
-        distance = np.sqrt((x1-x2)**2 + (y1-y2)**2 + (z1-z2)**2)
+        # distance = np.sqrt((x1-x2)**2 + (y1-y2)**2 + (z1-z2)**2)
+        distance = np.sqrt((x1-x2)**2 + (y1-y2)**2)
     elif distance_metric == "manhattan":
-        distance = np.abs(x1-x2) + np.abs(y1-y2) + np.abs(z1-z2)
+        # distance = np.abs(x1-x2) + np.abs(y1-y2) + np.abs(z1-z2)
+        distance = np.abs(x1-x2) + np.abs(y1-y2)
     elif distance_metric == "inverse_euclidean":
-        distance = 1/(np.sqrt((x1-x2)**2 + (y1-y2)**2 + (z1-z2)**2)+1)
+        # distance = 1/(np.sqrt((x1-x2)**2 + (y1-y2)**2 + (z1-z2)**2)+1)
+        distance = 1/(np.sqrt((x1-x2)**2 + (y1-y2)**2)+1)
     else:
-        distance = np.sqrt((x1-x2)**2 + (y1-y2)**2 + (z1-z2)**2)
+        # distance = np.sqrt((x1-x2)**2 + (y1-y2)**2 + (z1-z2)**2)
+        distance = np.sqrt((x1-x2)**2 + (y1-y2)**2)
 
     return distance
 
