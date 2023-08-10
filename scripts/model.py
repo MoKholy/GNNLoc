@@ -19,7 +19,6 @@ class GCN(torch.nn.Module):
 
         self.linear_layers.append(Linear(linear_dim, output_dim))
         self.d_out = dropout_rate
-        print(len(self.linear_layers))
 
     def forward(self, x, edge_attr, edge_index, batch):
         

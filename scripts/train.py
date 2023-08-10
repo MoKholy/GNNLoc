@@ -28,8 +28,8 @@ def load_dataset(name, k, batch_size, train_ratio, test_ratio):
     # get train and test dataset
     train_dataset, test_dataset = random_split(dataset, [train_size, test_size])
     # get train and test loader
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True, num_workers=16)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, drop_last=True, num_workers=16)
     return train_loader, test_loader
 
 # train model, report r2 score, MAE and loss to summary writer without function

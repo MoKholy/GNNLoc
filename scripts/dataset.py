@@ -72,7 +72,7 @@ class Dataset(Dataset):
 
         edge_attrs = np.array(edge_attrs)
         # get labels from scan coordinates
-        labels = torch.tensor(np.array(list(relative_scan_coords)), dtype=torch.float)
+        labels = torch.tensor(np.array([list(relative_scan_coords)]), dtype=torch.float)
 
         # get data object
         data = Data(x=torch.tensor(node_attrs, dtype=torch.float), edge_index=edge_index, edge_attr=torch.tensor(edge_attrs, dtype=torch.float), y=labels)
@@ -109,7 +109,8 @@ class Dataset(Dataset):
         for idx, scan in tqdm(enumerate(scans), total=len(scans)):
             # get the data object
             data = self._convNxGraphToPyGData(ap_coords, scan, scan_coords[idx], idx)
-            data.index = idx
+            data.indx = idx
+            # print(idx)
             # save the data object
             torch.save(data, osp.join(self.processed_dir, "{}_data_{}.pt".format(self.name, idx)))
         
