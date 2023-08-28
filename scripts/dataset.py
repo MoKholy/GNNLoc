@@ -1,4 +1,5 @@
 from torch_geometric.data import Data, Dataset
+from sklearn.preprocessing import MinMaxScaler
 from tqdm import tqdm
 import pandas as pd
 import os.path as osp
@@ -15,6 +16,7 @@ class Dataset(Dataset):
         self.k = k
         self.map = {}
         self.name = name
+        self.scales = {}
         super(Dataset, self).__init__(root, transform, pre_transform)
 
 
@@ -99,16 +101,35 @@ class Dataset(Dataset):
         self.length = len(dataframes[1])
         # get the ap coordinates
         ap_coords = dataframes[0]
-        # get the scans
-        scans = dataframes[1].to_numpy()
-        # get the scan coordinates
-        scan_coords = dataframes[2].to_numpy()
+        scans = dataframes[1]
+        scan_coords = dataframes[2]
 
+        # Normalize the dataframes using MinMaxScaler while keeping them as dataframes
+        ap_coords_scaler = MinMaxScaler()
+
+        ap_coords_normalized = pd.DataFrame(ap_coords_scaler.fit_transform(ap_coords), columns=ap_coords.columns)
+
+
+        # get the min and max of the scaler
+        self.scales["x_max"] = ap_coords_scaler.data_max_[0]
+        self.scales["x_min"] = ap_coords_scaler.data_min_[0]
+        self.scales["y_max"] = ap_coords_scaler.data_max_[1]
+        self.scales["y_min"] = ap_coords_scaler.data_min_[1]
+
+        # scale scan coords with same scaler
+        scan_coords_normalized = pd.DataFrame(ap_coords_scaler.fit_transform(scan_coords), columns=scan_coords.columns).to_numpy()
+
+        # get min and max values for scans
+        scans_min = scans.min().min()
+        scans_max = scans[scans != 100].max().max()
+
+        # normalize scans
+        scans_normalized = (scans - scans_min) / (scans_max - scans_min)
         # create a list of graphs
         
-        for idx, scan in tqdm(enumerate(scans), total=len(scans)):
+        for idx, scan in tqdm(enumerate(scans_normalized), total=len(scans_normalized)):
             # get the data object
-            data = self._convNxGraphToPyGData(ap_coords, scan, scan_coords[idx], idx)
+            data = self._convNxGraphToPyGData(ap_coords_normalized, scan, scan_coords_normalized[idx], idx)
             data.indx = idx
             # print(idx)
             # save the data object

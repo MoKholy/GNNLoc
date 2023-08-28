@@ -1,66 +1,191 @@
 import torch
 import torch.nn.functional as F 
-from torch.nn import Linear, BatchNorm1d, ModuleList
-from torch_geometric.nn import TransformerConv, TopKPooling, GCNConv
-from torch_geometric.nn import global_mean_pool as gap, global_max_pool as gmp
+from torch.nn import Linear, BatchNorm1d, ModuleList, ReLU, Dropout
+import torch.nn as nn
+from torch_geometric.nn import TransformerConv, TopKPooling, GCNConv, GATv2Conv, GraphNorm, GlobalAttention, GATConv
+# from torch_geometric.nn import global_mean_pool as gap
 
 
-class GCN(torch.nn.Module):
+class GCN(nn.Module):
     def __init__(self, feature_dim, embedding_dim, linear_dim, output_dim, num_layers, dropout_rate):
         super(GCN, self).__init__()
         self.conv1 = GCNConv(feature_dim, embedding_dim)
-        # self.bn1 = BatchNorm1d(embedding_dim)
+        self.gn1 = GraphNorm(embedding_dim)
         self.conv2 = GCNConv(embedding_dim, embedding_dim)
-        # self.bn2 = BatchNorm1d(embedding_dim)
-        self.linear_layers = ModuleList([])
-        self.linear_layers.append(Linear(embedding_dim, linear_dim))
-        for i in range(1, num_layers-1):
-            self.linear_layers.append(Linear(linear_dim, linear_dim))
-
-        self.linear_layers.append(Linear(linear_dim, output_dim))
+        self.gn2 = GraphNorm(embedding_dim)
+        # self.pool = TopKPooling(embedding_dim, ratio=0.2)
+        self.att = GlobalAttention(nn.Sequential(Linear(embedding_dim, 2*embedding_dim),\
+                                                       BatchNorm1d(2*embedding_dim),\
+                                                        ReLU(),\
+                                                        Linear(2*embedding_dim, 1)))
         self.d_out = dropout_rate
 
+
+        layers = []
+        prev_dim = embedding_dim
+        for i in range(num_layers):
+            layers.append(Linear(prev_dim, linear_dim))
+            layers.append(BatchNorm1d(linear_dim))
+            layers.append(ReLU())
+            layers.append(Dropout(p=self.d_out))
+            prev_dim = linear_dim
+
+        # append last layer
+        layers.append(Linear(linear_dim, output_dim))
+        self.linear_layers = nn.Sequential(*layers)
+
+        # self.linear_layers = ModuleList([])
+        # self.linear_layers.append(Linear(embedding_dim, linear_dim))
+        
+        # prev_dim = embedding_dim
+        # for i in range(num_layers):
+        #     self.linear_layers.append(Linear(prev_dim, linear_dim))
+        #     prev_dim = linear_dim
+        
+        # self.linear_layers.append(Linear(linear_dim, output_dim))
+
+
+        
+        
+        # self.init_weights()
+
+    # init weights for linear layers
+    def init_weights(self):
+        for layer in self.linear_layers:
+            if isinstance(layer, nn.Linear) and layer.out_features > 2:
+                nn.init.xavier_uniform_(layer.weight)
+                nn.init.zeros_(layer.bias)
+
+    
     def forward(self, x, edge_attr, edge_index, batch):
         
         
-
-        # # for each graph in batch, standardize edge weights
-        # for i in range(len(batch)):
-        #     # get the start and end index of the graph
-        #     start_idx = batch[i]
-        #     if i == len(batch)-1:
-        #         end_idx = edge_index.shape[1]
-        #     else:
-        #         end_idx = batch[i+1]
-        #     # get the edge weights
-        #     edge_weights = edge_attr[start_idx:end_idx]
-        #     # standardize the edge weights
-        #     edge_weights = (edge_weights - torch.mean(edge_weights))/torch.std(edge_weights)
-        #     # set the edge weights
-        #     edge_attr[start_idx:end_idx] = edge_weights
-
-
-
         x = self.conv1(x, edge_index, edge_attr)
-        # x = self.bn1(x)
+        x = self.gn1(x)
         x = F.relu(x)
-        x = F.dropout(x, p=self.d_out, training=self.training)
+        # x = F.dropout(x, p=self.d_out, training=self.training)
         x = self.conv2(x, edge_index, edge_attr)
-        # x = self.bn2(x)
+        x = self.gn2(x)
         x = F.relu(x)
-        x = F.dropout(x, p=self.d_out, training=self.training)
-        x = gap(x, batch)
-
-        for i in range(len(self.linear_layers)-1):
-            x = self.linear_layers[i](x)
-            x = F.relu(x)
-            x = F.dropout(x, p=self.d_out, training=self.training)
+        # x = F.dropout(x, p=self.d_out, training=self.training)
+        x= self.att(x, batch)
+        # x , edge_index, edge_attr, batch_index, _, _ = self.pool(x, edge_index, edge_attr, batch)
+        # x = gap(x, batch)
+        # for i in range(len(self.linear_layers)-1):
+        #     x = self.linear_layers[i](x)
+        #     x = F.relu(x)
+        #     x = F.dropout(x, p=self.d_out, training=self.training)
         
-        x = self.linear_layers[-1](x)
+        # x = self.linear_layers[-1](x)
+        x = self.linear_layers(x)
         return x
 
+class GAT(torch.nn.Module):
+    def __init__(self, feature_dim, embedding_dim, linear_dim, output_dim, num_layers, dropout_rate, heads=4):
+        super(GAT, self).__init__()
+        
+        self.conv1 = GATConv(feature_dim, embedding_dim, heads=4)  # You can adjust the number of heads
+        self.gn1 = GraphNorm(embedding_dim*heads)
+        self.conv2 = GATConv(embedding_dim * heads, embedding_dim, heads=4)  # Input dimension is multiplied by the number of heads from previous layer
+        self.gn2 = GraphNorm(embedding_dim*heads)
+        
+        self.att = GlobalAttention(torch.nn.Sequential(torch.nn.Linear(embedding_dim*heads, 2*embedding_dim),\
+                                                       torch.nn.BatchNorm1d(2*embedding_dim),\
+                                                       torch.nn.ReLU(),\
+                                                       torch.nn.Linear(2*embedding_dim, 1)))
+        self.d_out = dropout_rate
+        layers = []
+        prev_dim = embedding_dim*heads
+        for i in range(num_layers):
+            layers.append(Linear(prev_dim, linear_dim))
+            layers.append(BatchNorm1d(linear_dim))
+            layers.append(ReLU())
+            layers.append(Dropout(p=self.d_out))
+            prev_dim = linear_dim
 
+        # append last layer
+        layers.append(Linear(linear_dim, output_dim))
+        self.linear_layers = nn.Sequential(*layers)
+        
+        # self.init_weights()
+    
+    # Init weights for linear layers
+    def init_weights(self):
+        for layer in self.linear_layers:
+            if isinstance(layer, nn.Linear) and layer.out_features > 2:
+                nn.init.xavier_uniform_(layer.weight)
+                nn.init.zeros_(layer.bias)
+    
+    def forward(self, x, edge_attr, edge_index, batch):
+        x = self.conv1(x, edge_index)
+        x = self.gn1(x)
+        x = F.relu(x)
+        x = self.conv2(x, edge_index)
+        x = self.gn2(x)
+        x = F.relu(x)
+        x = self.att(x, batch)
+        # for i in range(len(self.linear_layers)-1):
+        #     x = self.linear_layers[i](x)
+        #     x = F.relu(x)
+        #     x = F.dropout(x, p=self.d_out, training=self.training)
+        
+        # x = self.linear_layers[-1](x)
+        x = self.linear_layers(x)
+        return x
 
+class GAT2(torch.nn.Module):
+    def __init__(self, feature_dim, embedding_dim, linear_dim, output_dim, num_layers, dropout_rate, heads=4):
+        super(GAT2, self).__init__()
+        
+        self.conv1 = GATv2Conv(feature_dim, embedding_dim, heads=heads, edge_dim=1)  # Use GATv2Conv
+        self.gn1 = GraphNorm(embedding_dim*heads)
+        self.conv2 = GATv2Conv(embedding_dim * heads, embedding_dim, heads=heads, edge_dim=1)  # Use GATv2Conv
+        self.gn2 = GraphNorm(embedding_dim*heads)
+        
+        self.att = GlobalAttention(torch.nn.Sequential(torch.nn.Linear(embedding_dim*heads, 2*embedding_dim, bias=False),\
+                                                       torch.nn.BatchNorm1d(2*embedding_dim),\
+                                                       torch.nn.ReLU(),\
+                                                       torch.nn.Linear(2*embedding_dim, 1)))
+        
+        self.d_out = dropout_rate
+        layers = []
+        prev_dim = embedding_dim*heads
+        for i in range(num_layers):
+            layers.append(Linear(prev_dim, linear_dim, bias=False))
+            layers.append(BatchNorm1d(linear_dim))
+            # layers.append(ReLU())
+            layers.append(nn.LeakyReLU(negative_slope=0.2))
+            layers.append(Dropout(p=self.d_out))
+            prev_dim = linear_dim
+
+        # append last layer
+        layers.append(Linear(linear_dim, output_dim))
+        self.linear_layers = nn.Sequential(*layers)
+        # self.init_weights()
+    
+    # Init weights for linear layers
+    def init_weights(self):
+        for layer in self.linear_layers:
+            if isinstance(layer, nn.Linear) and layer.out_features > 2:
+                nn.init.xavier_uniform_(layer.weight)
+                nn.init.zeros_(layer.bias)
+
+    def forward(self, x, edge_attr, edge_index, batch):
+        x = self.conv1(x, edge_index, edge_attr)  # Pass edge_attr to the first GATv2Conv layer
+        x = self.gn1(x)
+        x = F.relu(x)
+        x = self.conv2(x, edge_index, edge_attr)  # Pass edge_attr to the second GATv2Conv layer
+        x = self.gn2(x)
+        x = F.relu(x)
+        x = self.att(x, batch)
+        # for i in range(len(self.linear_layers)-1):
+        #     x = self.linear_layers[i](x)
+        #     x = F.relu(x)
+        #     x = F.dropout(x, p=self.d_out, training=self.training)
+        
+        # x = self.linear_layers[-1](x)
+        x = self.linear_layers(x)
+        return x
 
 # class GNN(torch.nn.Module):
 #     def __init__(self, feature_size, model_params):
